@@ -33,7 +33,7 @@ wireless-power off
 #not using hostapd udhcpd
 #------------------------------
 #allow-hotplug wlan0
-#iface wlan0 inet manual
+#iface wlan0 inet static
 #wpa-ssid waroid-5g
 #wpa-psk 12345678
 #address 192.168.1.100
