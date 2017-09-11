@@ -10,24 +10,20 @@
 #include<arpa/inet.h>
 #include<sys/socket.h>
 
+#include "define.h"
 #include "core/Logger.h"
 
-#define RECV_BUFFER_LEN	512
-#define BIND_PORT		5555
-#define TARGET_PORT		5001
-
-struct PACKET
+void sendR_C_CAMERA_STATUS(int s, const sockaddr_in& to, CAMERA_STATUS cameraStatus)
 {
-	unsigned int mark;
-	int width;
-	int height;
-	int fps;
-	int bitrate;
-	unsigned char ip0;
-	unsigned char ip1;
-	unsigned char ip2;
-	unsigned char ip3;
-};
+	char buffer[MAX_BUFFER_LEN];
+	HEADER* header = (HEADER*)buffer;
+	header->command = COMMAND::R_C_CAMERA_STATUS;
+	header->dataSize = sizeof(DATA_R_C_CAMERA_STATUS);
+	DATA_R_C_CAMERA_STATUS* data = (DATA_R_C_CAMERA_STATUS*)header->getData();
+	data->cameraStatus = cameraStatus;
+
+	sendto(s, buffer, header->getTotalSize(), 0, (const sockaddr*)&to, sizeof(to));
+}
 
 int main(int argc, char* argv[])
 {
@@ -46,56 +42,62 @@ int main(int argc, char* argv[])
 	char buf[RECV_BUFFER_LEN];
 	sockaddr_in saFrom;
 	socklen_t saFromLen = sizeof(saFrom);
-	bool isOpen = false;
+	CAMERA_STATUS::ETYPE cameraStatus = CAMERA_STATUS::CLOSED;
 	while (1)
 	{
 		GLOG("Waiting for data...");
 		int len = recvfrom(s, buf, RECV_BUFFER_LEN, 0, (sockaddr*)&saFrom, &saFromLen);
 		GCHECK_RETVAL(len > 0, -1);
 		GLOG("recevied packet. from=%s:%d", inet_ntoa(saFrom.sin_addr), ntohs(saFrom.sin_port));
-		GCHECK_CONTINUE(len == sizeof(PACKET));
+		GCHECK_CONTINUE(len > sizeof(HEADER));
 
-		PACKET* packet = (PACKET*)buf;
-		GCHECK_CONTINUE(packet->mark == 0xe1e1c2c2);
-
-		if (packet->width > 0 && packet->height > 0 && packet->fps > 0 && packet->bitrate > 0)
+		HEADER* header = (HEADER*)buf;
+		switch (header->command)
 		{
-			if (isOpen)
+		case COMMAND::C_R_CAMERA_STATUS:
 			{
-				GLOG("already opened camera.");
+				sendR_C_CAMERA_STATUS(s, saFrom, cameraStatus);
 			}
-			else
+			break;
+		case COMMAND::C_R_OPEN_CAMERA:
 			{
-				GLOG("open camera.");
-				char command[256];
-				sprintf(command, "raspivid -o - -t 0 -w %d -h %d -fps %d -b %d -hf -n | nc %d.%d.%d.%d %d &", packet->width, packet->height, packet->fps, packet->bitrate, packet->ip0, packet->ip1, packet->ip2, packet->ip3, TARGET_PORT);
+				if (cameraStatus == CAMERA_STATUS::OPENED)
+				{
+					GLOG("already opened camera.");
+				}
+				else
+				{
+					char command[256];
+					sprintf(command, "raspivid -o - -t 0 -w %d -h %d -fps %d -b %d -hf -n | nc %d.%d.%d.%d %d &", packet->width, packet->height, packet->fps, packet->bitrate, packet->ip0, packet->ip1, packet->ip2, packet->ip3, TARGET_PORT);
 #ifdef __RASPBERRY__
-				system(command);
-#else
-				printf("system: %s\n", command);
+					system(command);
 #endif
+					GLOG("open camera. system=%s", command);
+					cameraStatus = CAMERA_STATUS::OPENED;
+				}
 
-				isOpen = true;
+				sendR_C_CAMERA_STATUS(s, saFrom, cameraStatus);
 			}
-		}
-		else
-		{
-			if (isOpen)
+			break;
+		case COMMAND::C_R_CLOSE_CAMERA:
 			{
-				GLOG("close camera.");
+				if (cameraStatus == CAMERA_STATUS::CLOSED)
+				{
+					GLOG("already closed camera.");
+				}
+				else
+				{
 #ifdef __RASPBERRY__
-				//system("killall nc");
-				system("killall raspivid");
-#else
-				printf("system: killall raspivid\n");
+					//system("killall nc");
+					system("killall raspivid");
 #endif
+					GLOG("close camera. system=killall raspivid");
+					cameraStatus = CAMERA_STATUS::CLOSED;
+				}
 
-				isOpen = false;
+				sendR_C_CAMERA_STATUS(s, saFrom, cameraStatus);
 			}
-			else
-			{
-				GLOG("already closed camera.");
-			}
+			break;
 		}
 	}
 
