@@ -13,7 +13,7 @@
 #include "define.h"
 #include "core/Logger.h"
 
-void sendR_C_CAMERA_STATUS(int s, const sockaddr_in& to, CAMERA_STATUS cameraStatus)
+void sendR_C_CAMERA_STATUS(int s, const sockaddr_in& to, CAMERA_STATUS::ETYPE cameraStatus)
 {
 	char buffer[MAX_BUFFER_LEN];
 	HEADER* header = (HEADER*)buffer;
@@ -39,14 +39,14 @@ int main(int argc, char* argv[])
 	sa.sin_addr.s_addr = htonl(INADDR_ANY);
 	GCHECK_RETVAL(bind(s, (const sockaddr*)&sa, sizeof(sa)) != -1, -1);
 
-	char buf[RECV_BUFFER_LEN];
+	char buf[MAX_BUFFER_LEN];
 	sockaddr_in saFrom;
 	socklen_t saFromLen = sizeof(saFrom);
 	CAMERA_STATUS::ETYPE cameraStatus = CAMERA_STATUS::CLOSED;
 	while (1)
 	{
 		GLOG("Waiting for data...");
-		int len = recvfrom(s, buf, RECV_BUFFER_LEN, 0, (sockaddr*)&saFrom, &saFromLen);
+		int len = recvfrom(s, buf, MAX_BUFFER_LEN, 0, (sockaddr*)&saFrom, &saFromLen);
 		GCHECK_RETVAL(len > 0, -1);
 		GLOG("recevied packet. from=%s:%d", inet_ntoa(saFrom.sin_addr), ntohs(saFrom.sin_port));
 		GCHECK_CONTINUE(len > sizeof(HEADER));
@@ -67,8 +67,10 @@ int main(int argc, char* argv[])
 				}
 				else
 				{
+					DATA_C_R_OPEN_CAMERA* data = (DATA_C_R_OPEN_CAMERA*)header->getData();
+
 					char command[256];
-					sprintf(command, "raspivid -o - -t 0 -w %d -h %d -fps %d -b %d -hf -n | nc %d.%d.%d.%d %d &", packet->width, packet->height, packet->fps, packet->bitrate, packet->ip0, packet->ip1, packet->ip2, packet->ip3, TARGET_PORT);
+					sprintf(command, "raspivid -o - -t 0 -w %d -h %d -fps %d -b %d -hf -n | nc %d.%d.%d.%d %d &", data->width, data->height, data->fps, data->bitrate, data->ip0, data->ip1, data->ip2, data->ip3, TARGET_PORT);
 #ifdef __RASPBERRY__
 					system(command);
 #endif

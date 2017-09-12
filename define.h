@@ -59,7 +59,7 @@ struct DATA_C_R_OPEN_CAMERA
 
 struct DATA_R_C_CAMERA_STATUS
 {
-	int cameraStatus
+	int cameraStatus;
 };
 
 
