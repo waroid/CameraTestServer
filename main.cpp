@@ -48,10 +48,12 @@ int main(int argc, char* argv[])
 		GLOG("Waiting for data...");
 		int len = recvfrom(s, buf, MAX_BUFFER_LEN, 0, (sockaddr*)&saFrom, &saFromLen);
 		GCHECK_RETVAL(len > 0, -1);
-		GLOG("recevied packet. from=%s:%d", inet_ntoa(saFrom.sin_addr), ntohs(saFrom.sin_port));
-		GCHECK_CONTINUE(len > sizeof(HEADER));
+		GLOG("received buffer. from=%s:%d len=%d", inet_ntoa(saFrom.sin_addr), ntohs(saFrom.sin_port), len);
+		GCHECK_CONTINUE(len >= sizeof(HEADER));
 
 		HEADER* header = (HEADER*)buf;
+		GLOG("received packet. command=%d datasize=%d", header->command, header->dataSize);
+
 		switch (header->command)
 		{
 		case COMMAND::C_R_CAMERA_STATUS:
